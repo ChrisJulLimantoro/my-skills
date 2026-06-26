@@ -1,12 +1,15 @@
-.PHONY: install install-global uninstall list new help
+.PHONY: install install-global uninstall list new build help
 
 SKILL_NAME ?=
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ { printf "  %-18s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
-install: ## Set up skills for this project only
+install: ## Set up skills for this project only (symlinks + Cursor commands)
 	bash scripts/setup.sh
+
+build: ## Regenerate Cursor commands from skills/*/SKILL.md
+	bash scripts/build-cursor.sh
 
 install-global: ## Install skills globally (~/.claude/skills symlink)
 	bash scripts/setup.sh --global

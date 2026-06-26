@@ -1,10 +1,44 @@
 # My Skills
 
-A portable collection of Claude Code skills for daily development workflows. Clone this repo once, run the setup script, and these skills become available in every project on your machine.
+A portable, version-controlled collection of agent **skills** — one canonical source of truth
+that installs into five different AI coding agents. Clone once, run the setup script, and every
+skill becomes available in Claude Code, Hermes, Codex, OpenCode, and Cursor across every project
+on your machine.
 
 ## What is a "skill"?
 
-A skill is a reusable prompt template that Claude Code can invoke by name. When you type a trigger phrase (e.g. "review a PR" or "design the architecture"), Claude recognizes it and runs the corresponding skill's instructions automatically. Skills keep complex, multi-step workflows consistent across projects without copy-pasting prompts.
+A skill is a reusable, multi-step prompt workflow defined in a single `SKILL.md` file. When you
+type a trigger phrase (e.g. "do a deep dive") or invoke it as a slash command (e.g.
+`/deep-research`), the agent runs the skill's instructions automatically — no copy-pasting
+prompts between projects or tools.
+
+## The architecture: one source, five tools
+
+The key insight: **four of the five supported tools read `SKILL.md` natively** (the exact same
+format). Only Cursor needs a transform. So there is exactly **one** copy of each skill —
+everything else is a symlink or a generated file.
+
+```
+skills/<name>/SKILL.md          ← canonical source of truth (edit here, only here)
+        │
+        ├─ symlink ──▶ Claude Code   (~/.claude/skills,        .claude/skills)
+        ├─ symlink ──▶ Hermes        (~/.hermes/skills,        skills/)
+        ├─ symlink ──▶ Codex         (~/.codex/skills,         .agents/skills)
+        ├─ symlink ──▶ OpenCode      (~/.config/opencode/skills, .opencode/skills)
+        └─ generate ▶ Cursor         (~/.cursor/commands/*.md, .cursor/commands)
+```
+
+| Tool | Reads `SKILL.md`? | Global directory | Project directory |
+|---|---|---|---|
+| Claude Code | ✅ native | `~/.claude/skills/` | `.claude/skills/` |
+| Hermes (Nous) | ✅ native | `~/.hermes/skills/` | `skills/` |
+| Codex (OpenAI) | ✅ native | `~/.codex/skills/` | `.agents/skills/` |
+| OpenCode | ✅ native | `~/.config/opencode/skills/` | `.opencode/skills/` |
+| Cursor | ❌ uses `.md` commands | `~/.cursor/commands/` | `.cursor/commands/` |
+
+Because the four native tools are symlinked to the same `skills/` directory, editing a `SKILL.md`
+updates all of them at once. Cursor commands are regenerated from the same source by
+`scripts/build-cursor.sh`.
 
 ## Quick Start
 
@@ -13,153 +47,97 @@ A skill is a reusable prompt template that Claude Code can invoke by name. When 
 git clone <repo-url> ~/my-skills
 cd ~/my-skills
 
-# 2. Make skills available in every project on this machine
+# 2. Install for every tool on this machine
 make install-global
 ```
 
-That's it. A symlink is created at `~/.claude/skills` pointing to this repo. Claude Code picks it up automatically in any project.
+That wires `~/.claude/skills`, `~/.hermes/skills`, `~/.codex/skills`,
+`~/.config/opencode/skills` to this repo's `skills/` directory and links generated Cursor
+commands into `~/.cursor/commands/`.
 
-**Per-project only:**
+**Per-project only** (no changes to your home directory):
 
 ```bash
 make install
 ```
 
-This sets up the skills locally in the current repo and creates the `.openclaw/skills` symlink for OpenClaw compatibility.
+This creates in-repo symlinks (`.claude/skills`, `.opencode/skills`, `.agents/skills`,
+`.cursor/commands`) so the skills work when an agent is launched from inside this repo.
 
 ## Setup Commands
 
-All setup operations are available via `make` (or directly via `bash scripts/setup.sh`):
-
 | Command | What it does |
 |---|---|
-| `make install` | Set up skills for this project only |
-| `make install-global` | Install globally — skills available in every project |
-| `make uninstall` | Remove the `~/.claude/skills` global symlink |
-| `make list` | List all installed skills with version and trigger |
-| `make new SKILL_NAME=my-skill` | Scaffold a new skill with a stub `SKILL.md` |
-| `make update` | Pull latest changes and re-validate |
+| `make install` | Wire skills for this project only |
+| `make install-global` | Install for all five tools, every project on this machine |
+| `make build` | Regenerate Cursor commands from `skills/*/SKILL.md` |
+| `make uninstall` | Remove all global symlinks + generated Cursor command links |
+| `make list` | List all skills with their trigger description |
+| `make new SKILL_NAME=my-skill` | Scaffold a new skill |
+| `make update` | Pull latest changes and re-wire |
 
-The same flags work directly on the script if you prefer:
+The same flags work on the script directly: `bash scripts/setup.sh [--global | --uninstall |
+--list | --new <name>]`.
 
-```bash
-bash scripts/setup.sh                  # install (project-local)
-bash scripts/setup.sh --global         # install globally
-bash scripts/setup.sh --uninstall      # remove global symlink
-bash scripts/setup.sh --list           # list skills
-bash scripts/setup.sh --new my-skill   # scaffold a new skill
-```
+## Available Skills (14)
 
-## Available Skills
+| Skill | What it does |
+|---|---|
+| `codereview` | 4-parallel-reviewer local diff review → ranked report + verdict |
+| `command-development` | Guidance for authoring Claude Code slash commands |
+| `creative-ui` | Visual design: color palettes, typography, spacing, motion |
+| `deep-research` | Multi-source research → `EXPLORATION_REPORT.md` with conflict synthesis |
+| `find-skills` | Discover and install agent skills by intent |
+| `frontend-design` | Distinctive, production-grade frontend interfaces |
+| `graphify` | Any input → knowledge graph → clustered communities + HTML/JSON/report |
+| `hook-development` | Author Claude Code plugin hooks (PreToolUse/PostToolUse/etc.) |
+| `plugin-settings` | The `.local.md` pattern for configurable plugin settings |
+| `plugin-structure` | Scaffold and organize a Claude Code plugin |
+| `pr-review` | End-to-end GitHub PR review with inline comments via `gh` |
+| `skill-creator` | Interview-driven authoring of a new `SKILL.md` |
+| `skill-development` | Guidance and best practices for writing skills |
+| `weekly-report` | GitHub + Calendar + Gmail → weekly report synced to Google Docs |
 
-| Skill | What it does | How to trigger |
-|---|---|---|
-| [`pr-architect`](#pr-architect) | Writes intent-based PR descriptions and CHANGELOG entries from `git diff` | "review a PR", "write a PR description", "document this pull request" |
-| [`deep-research`](#deep-research) | Multi-source research with conflict synthesis, outputs `EXPLORATION_REPORT.md` | "explore", "do a deep dive", "research in depth", "investigate" |
-| [`architect-pro`](#architect-pro) | Generates C4 or Mermaid diagrams before any implementation starts | "design the architecture", "draw a diagram", "plan before we build" |
-| [`skill-creator`](#skill-creator) | Interviews you and writes a new `SKILL.md` file | "create a skill", "build a skill", "I need a skill that" |
-| [`code-reviewer`](#code-reviewer) | Soft post-write review: logic, edge cases, naming, conventions, security | "review this code", "check my code", "soft review" |
-| [`creative-ui`](#creative-ui) | Visual design decisions: color palettes, typography, spacing, micro-interactions | "design a UI", "make this look better", "pick a color palette" |
-| [`ux-strategist`](#ux-strategist) | User flows, friction audits, information architecture, onboarding design | "map the user flow", "reduce friction", "audit UX" |
-
----
-
-## Skill Details
-
-### pr-architect
-
-Runs `git diff main...HEAD`, classifies each change by impact type and severity, then outputs a structured PR description (What / Why / Impact / Breaking Changes / Testing) and a Keep a Changelog snippet. Documents intent, not line counts.
-
-### deep-research
-
-Searches a minimum of 8 sources across at least 4 categories (docs, academic, community, practitioner, contrarian, etc.), synthesizes conflicts between sources, and writes a structured `EXPLORATION_REPORT.md` to the working directory.
-
-### architect-pro
-
-Selects the right diagram type (C4 Context, C4 Container, flowchart, sequence, ER, state), generates it, adds a written summary of decisions and trade-offs, then **stops and asks for confirmation** before any implementation begins.
-
-### skill-creator
-
-Runs a three-round interview to understand purpose, workflow, and constraints, drafts a `SKILL.md`, iterates based on feedback, then writes the file to `.claude/skills/<name>/SKILL.md`.
-
-### code-reviewer
-
-A lightweight advisory review (max 10 observations) covering: logic correctness, edge cases, error handling, naming clarity, project conventions, and obvious security flags. Never blocks — always advisory.
-
-### creative-ui
-
-Starts by identifying emotional tone, audience, and one visual anchor. Produces CSS design tokens for color, a typography scale, spacing system, motion spec, and implemented code. Focuses on craft and making designs memorable, not just functional.
-
-### ux-strategist
-
-Starts by articulating the user's mental model and job-to-be-done. Maps current and proposed flows as Mermaid diagrams, audits against Nielsen's 10 heuristics, identifies unnecessary friction, and proposes concrete changes with success metrics.
-
----
+Run `make list` for the live list and descriptions.
 
 ## Repository Structure
 
 ```
-.claude/skills/<skill-name>/SKILL.md   — skill definitions (auto-discovered by Claude Code)
-.openclaw/skills                        — symlink to .claude/skills (OpenClaw compatibility)
-scripts/setup.sh                        — bootstrapper and symlink manager
-Makefile                                — convenience targets for setup operations
-CLAUDE.md                               — project instructions for Claude Code
+skills/<skill-name>/SKILL.md   — canonical skill definitions (the only place to edit)
+dist/cursor/commands/<name>.md — generated Cursor commands (gitignored, rebuilt on demand)
+scripts/setup.sh               — installer / symlink manager for all five tools
+scripts/build-cursor.sh        — SKILL.md → Cursor command generator
+Makefile                       — convenience targets
+CLAUDE.md                      — project instructions for Claude Code
 ```
+
+The in-repo tool symlinks (`.claude/skills`, `.opencode/skills`, `.agents/skills`,
+`.cursor/commands`) and `dist/` are gitignored — they are recreated by `make install`.
 
 ## Adding a New Skill
 
-**Option A — scaffold with the setup script:**
+**Option A — scaffold:**
 
 ```bash
-make new SKILL_NAME=my-skill
-# or: bash scripts/setup.sh --new my-skill
+make new SKILL_NAME=my-skill   # creates skills/my-skill/SKILL.md
+make build                     # regenerate the Cursor command
 ```
 
-This creates `.claude/skills/my-skill/SKILL.md` with the correct frontmatter and section stubs. Open the file and fill in the description and body.
+**Option B — use the `skill-creator` skill:** open any project and ask to "create a new skill".
 
-**Option B — use the skill-creator skill:**
-
-Open any project in Claude Code and type: `create a new skill`
-
-Claude will interview you and write the file.
-
-**Option C — write it manually:**
-
-1. Create `.claude/skills/<your-skill-name>/SKILL.md`
-2. Add YAML frontmatter:
+**Option C — write it manually:** create `skills/<name>/SKILL.md` with frontmatter:
 
 ```yaml
 ---
-name: your-skill-name
-description: This skill should be used when the user asks to "...", "...", or "...". One sentence on what it does.
-version: 0.1.0
+name: your-skill-name        # kebab-case, matches the directory name
+description: This skill should be used when the user asks to "...", "...". One sentence on what it does.
 ---
 ```
 
-3. Write the skill body in imperative form ("Run the diff." not "You should run the diff.")
-4. Run `bash scripts/setup.sh` to validate
+`name` and `description` are the only required fields (Codex and Cursor rely on them). Existing
+`trigger:` / `version:` fields are harmless extras and are preserved. Write the body in
+imperative form ("Run the diff." not "You should run the diff."), keep it under ~2,000 words, and
+move large reference material into a `references/` subdirectory.
 
-**Frontmatter rules:**
-- `name`: kebab-case, must match the directory name
-- `description`: third-person, opens with "This skill should be used when the user asks to", includes quoted trigger phrases
-- `version`: start at `0.1.0`
-
-**Body rules:**
-- Imperative/infinitive verb form throughout
-- No second person ("you")
-- Keep under 2,000 words; move large reference material to a `references/` subdirectory
-
-## Global vs. Per-Project Installation
-
-| Mode | Command | Effect |
-|---|---|---|
-| Global (recommended) | `make install-global` | `~/.claude/skills` → this repo — works in every project |
-| Per-project | `make install` | Skills available only in this repo |
-| Remove global | `make uninstall` | Removes the `~/.claude/skills` symlink |
-
-If `~/.claude/skills` already exists as a real directory (not a symlink), the script will warn you rather than overwrite it. To migrate: copy its contents into `.claude/skills/` in this repo, delete the original directory, then re-run.
-
-## Compatibility
-
-- **Claude Code** — skills are auto-discovered from `~/.claude/skills` (global) or `.claude/skills` (project-local)
-- **OpenClaw** — the `.openclaw/skills` symlink provides compatibility with the OpenClaw skill loader
+After adding or editing a skill, run `make build` (or `make install`) to refresh the generated
+Cursor commands. The four native tools pick up changes automatically through their symlinks.
