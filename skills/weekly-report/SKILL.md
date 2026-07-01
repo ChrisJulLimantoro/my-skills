@@ -3,7 +3,6 @@ name: weekly-report
 description: Generate my weekly report (GitHub + Google Calendar + Gmail forms), ask for the manual bits, then sync to Google Docs. Runs from any directory. Trigger - /weekly-report
 trigger: /weekly-report
 ---
-
 # /weekly-report
 
 Generate a GDP Labs–style weekly report from anywhere. GitHub data comes from the
@@ -19,7 +18,7 @@ accomplishment summaries. Manual sections are gathered by asking the user intera
 ```
 GITHUB_OWNER: GDP-ADMIN
 GITHUB_USER:  chrisjulius-gdplabs
-REPOS:        glair-vision-engineering, glair-ocr, gl-sdk, glaip-sdk, ai-agent-platform, glair-vision-node-sdk, glair-vision-python-sdk
+REPOS:        glair-vision-engineering, glair-ocr, gl-sdk, glaip-sdk, ai-agent-platform, glair-vision-node-sdk, glair-vision-python-sdk, glair-vision-go, glair-vision-java
 AUTHOR_NAME:  Christopher Julius Limantoro
 TIMEZONE:     Asia/Jakarta (WIB, UTC+07:00)
 OUTPUT_DIR:   ~/.claude/skills/weekly-report/output
@@ -28,6 +27,7 @@ OAUTH:        ~/.claude/skills/weekly-report/google_oauth.py
 ```
 
 **Prerequisites** (one-time):
+
 - `gh` CLI installed and authenticated (`gh auth status`). Scopes need `repo` + `read:org`.
   No GitHub token is stored in this skill — `gh` provides it.
 - Python 3 with `google-auth`, `google-auth-oauthlib`, and `google-api-python-client`
@@ -90,6 +90,7 @@ For each repo in `REPOS`, using `GITHUB_OWNER`/`GITHUB_USER` and the window from
 Run repos in parallel where practical. Skip repos that error (e.g. no access) and note them.
 
 Then **summarize as Claude** into the report's house style — for each significant PR:
+
 ```
 * <pr title> [<REPO>#<num>](<url>)
     * **Description:** <one-line what/why>
@@ -97,6 +98,7 @@ Then **summarize as Claude** into the report's house style — for each signific
     * **Key Changes Implemented:**
         * <bullet>
 ```
+
 Group by repo if multiple. Build `deployments` and `prs_reviewed` as bullet lists of
 `<title> [<REPO>#<num>](<url>)` (indented two spaces). Use "* None" when a list is empty.
 
@@ -112,6 +114,7 @@ Group by repo if multiple. Build `deployments` and `prs_reviewed` as bullet list
   * **Monday, Jan 5th, 2026**
     * 9:00 AM – 9:45 AM: <event title>
   ```
+
   Times in WIB. Skip all-day "Out of office"/holiday noise unless meaningful. If none,
   `  * None`.
 

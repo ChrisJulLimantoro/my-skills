@@ -24,11 +24,12 @@ skill change, run `bash scripts/setup.sh` (or `make build`) to refresh the Curso
 The in-repo tool symlinks (`.claude/skills`, `.opencode/skills`, `.agents/skills`,
 `.cursor/commands`) and `dist/` are gitignored — `make install` recreates them.
 
-## Skills Included (14)
+## Skills Included (16)
 
 `codereview`, `command-development`, `creative-ui`, `deep-research`, `find-skills`,
 `frontend-design`, `graphify`, `hook-development`, `plugin-settings`, `plugin-structure`,
-`pr-review`, `skill-creator`, `skill-development`, `weekly-report`.
+`pr-comment`, `pr-feedback`, `pr-review`, `skill-creator`, `skill-development`,
+`weekly-report`.
 
 Run `make list` for descriptions.
 

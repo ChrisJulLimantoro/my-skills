@@ -40,10 +40,26 @@ with the JSON/diff temp files.
 Collect and stash these. `<n>` = PR number, `<owner>/<repo>` = repo slug.
 
 1. Repo slug: `gh repo view --json nameWithOwner -q .nameWithOwner`.
-2. PR metadata: `gh pr view [<n>] --json number,headRefOid,headRefName,baseRefName,title,state,author`.
-   - `number` → `<n>`; `headRefOid` → the `commit_id` required by the reviews API.
+2. PR metadata: `gh pr view [<n>] --json number,headRefOid,headRefName,baseRefName,title,state,author,changedFiles,additions,deletions`.
+   - `number` → `<n>`; `headRefOid` → the `commit_id` required by the reviews API and the
+     commit shown in the report's "Reviewed at" table.
+   - `changedFiles`, `additions`, `deletions` feed both the Step 2 size heuristic and the
+     "Reviewed at" table.
 3. Diff → `<SCRATCH>/pr.diff`:  `gh pr diff <n>`.
-4. Changed files → `<SCRATCH>/pr-files.txt`:  `gh pr diff <n> --name-only`.
+   - **This must reflect GitHub's PR changes, not a local `git diff`.** GitHub computes the PR
+     against its *own* base branch (`baseRefName` from step 2), which is frequently **not** `main`
+     (stacked PRs, feature-branch bases). A local `git diff main...HEAD` will over-report files
+     that already merged into the PR's base. Always source the diff from GitHub.
+   - If `gh pr diff` ever returns empty/odd output (e.g. it fell back to a local ref), fetch the
+     diff straight from the API instead:
+     `gh api repos/<owner>/<repo>/pulls/<n> -H "Accept: application/vnd.github.v3.diff" > <SCRATCH>/pr.diff`.
+4. Changed files (authoritative, from GitHub) → `<SCRATCH>/pr-files.txt`:
+   `gh api repos/<owner>/<repo>/pulls/<n>/files --paginate -q '.[].filename'`.
+   - This is the canonical changed-files set GitHub shows on the PR. Prefer it over
+     `gh pr diff --name-only`. Cross-check that the file count matches the PR's `changedFiles`
+     (from `gh pr view <n> --json changedFiles`); if they differ, the diff is stale/wrong-base —
+     re-fetch via the API before reviewing. The same endpoint also returns per-file `patch`
+     fields if you need hunk data without parsing the full diff.
 5. Prior **reviews**:  `gh api repos/<owner>/<repo>/pulls/<n>/reviews`
    (fields: `state`, `body`, `user.login`, `submitted_at`).
 6. Prior **inline review comments**:  `gh api repos/<owner>/<repo>/pulls/<n>/comments --paginate`
@@ -66,7 +82,21 @@ Collect and stash these. `<n>` = PR number, `<owner>/<repo>` = repo slug.
 
 If there are **no prior reviews/comments**, skip the reconciliation step (Step 4) entirely.
 
-## Step 2 — Run the 4-aspect engine internally (parallel)
+## Step 2 — Gather findings (inline for small PRs, 4-aspect parallel agents otherwise)
+
+**First decide whether to fan out to sub-agents.** Spawning 4 agents on a tiny PR is overkill.
+
+Size heuristic (using `changedFiles` / `additions` / `deletions` from Step 1.2):
+- **Small** = `changedFiles <= 5` **AND** `additions + deletions <= 150`. This is a guideline —
+  use judgment (e.g. one 400-line file is *not* small; ten one-line doc tweaks *is* small).
+- **Small → review inline yourself (no sub-agents).** Read `pr.diff` and the changed files
+  directly and produce findings for **all four aspects** (correctness, hygiene, security,
+  performance) using the same rubrics and severity scale below. Write the results to the same
+  `<SCRATCH>/pr-review-out/<ASPECT>.json` files (same shape as item 6) so Step 3's merge logic
+  is unchanged.
+- **Not small → dispatch the 4 parallel Agents** as described below.
+
+### Parallel path (non-small PRs)
 
 Dispatch **all four Agent calls in one message** so they run concurrently. Use
 `subagent_type: "general-purpose"` for each (Explore is read-only and cannot write the JSON).
@@ -165,9 +195,23 @@ unaddressed.)
    (Use `side":"LEFT"` only for LEFT-side findings; for a multi-line span add `start_line` +
    `start_side`.)
 3. **Overall body** (Markdown) =
-   - `**Verdict:** <…>  (event: <…>)`
+   - `**Verdict:** <…>` (verdict text only — do **not** append `(event: …)`; the event is sent
+     via the API payload, not shown in the body)
+   - `## Reviewed at` table (immediately after the Verdict line) recording the inspected commit
+     and base, built from Step 1.2 metadata:
+     ```
+     ## Reviewed at
+     | Field | Value |
+     |-------|-------|
+     | Commit | `<short 7-char headRefOid>` (`<full headRefOid>`) |
+     | Branch | `<headRefName>` → `<baseRefName>` |
+     | Files | <changedFiles> changed (+<additions>/-<deletions>) |
+     ```
    - `## Summary` line with counts + one-paragraph assessment
-   - `## Findings` table (same columns/shape as `/codereview`: `# | Severity | Aspect(s) | File | Line | Issue | Suggestion`, sorted Critical→Nit, files contiguous)
+   - `## Findings` table — slim columns only: `# | Severity | Aspect(s) | File | Line`, sorted
+     Critical→Nit, files contiguous. Do **not** put Issue/Suggestion text in the table.
+   - `## Details` section below the table: one short paragraph per finding, keyed by its `#`,
+     spelling out the issue and the concrete suggestion (e.g. `**1.** <issue>. **Suggestion:** <fix>`).
    - `## Prior review status` table from Step 4 (omit if none)
    - per-file `### <path>` fallback findings from 5.1 (omit if none)
 4. **Event** from the verdict: `APPROVE` / `COMMENT` / `REQUEST_CHANGES`.
@@ -180,7 +224,9 @@ unaddressed.)
 ## Step 6 — Confirm, then submit
 
 1. Write the same human-readable content to `./review-report.md` and **print the Verdict +
-   Summary + tables in chat**.
+   Summary + tables in chat**. `review-report.md` contains the same body as the GitHub review,
+   including the `## Reviewed at` table, so the local report and the posted comment agree on
+   which commit was inspected.
 2. **Ask the user to confirm before posting** (this is an outward-facing action). Show the
    verdict/event and how many inline comments will be posted. Do **not** post on your own.
    - Note: GitHub rejects `APPROVE`/`REQUEST_CHANGES` on the user's **own** PR. If the PR author
