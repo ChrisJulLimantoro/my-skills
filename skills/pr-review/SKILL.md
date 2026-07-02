@@ -1,13 +1,13 @@
 ---
 name: pr-review
-description: Review a real GitHub PR end-to-end. Fetches the PR diff with gh, runs a 4-aspect parallel review (correctness, security, performance, hygiene) internally, reads prior comments/reviews to reconcile whether earlier requested changes were addressed, then posts inline per-file comments plus an overall review whose verdict maps to APPROVE / COMMENT / REQUEST_CHANGES. Confirms before posting. Trigger - /pr-review
+description: Review a real GitHub PR end-to-end. Fetches the PR diff with gh, runs a 5-aspect parallel review (correctness, security, performance, hygiene, efficiency) internally, reads prior comments/reviews to reconcile whether earlier requested changes were addressed, then posts inline per-file comments plus an overall review whose verdict maps to APPROVE / COMMENT / REQUEST_CHANGES. Confirms before posting. Trigger - /pr-review
 trigger: /pr-review
 ---
 
 # /pr-review
 
 Review a GitHub pull request and publish the review back to GitHub. You are the orchestrator
-AND the final merger: 4 sub-agents gather findings in parallel; you de-duplicate, re-rank,
+AND the final merger: 5 sub-agents gather findings in parallel; you de-duplicate, re-rank,
 compute the verdict, reconcile against any prior review, and post a single GitHub review with
 inline per-file comments.
 
@@ -82,28 +82,28 @@ Collect and stash these. `<n>` = PR number, `<owner>/<repo>` = repo slug.
 
 If there are **no prior reviews/comments**, skip the reconciliation step (Step 4) entirely.
 
-## Step 2 — Gather findings (inline for small PRs, 4-aspect parallel agents otherwise)
+## Step 2 — Gather findings (inline for small PRs, 5-aspect parallel agents otherwise)
 
-**First decide whether to fan out to sub-agents.** Spawning 4 agents on a tiny PR is overkill.
+**First decide whether to fan out to sub-agents.** Spawning 5 agents on a tiny PR is overkill.
 
 Size heuristic (using `changedFiles` / `additions` / `deletions` from Step 1.2):
 - **Small** = `changedFiles <= 5` **AND** `additions + deletions <= 150`. This is a guideline —
   use judgment (e.g. one 400-line file is *not* small; ten one-line doc tweaks *is* small).
 - **Small → review inline yourself (no sub-agents).** Read `pr.diff` and the changed files
-  directly and produce findings for **all four aspects** (correctness, hygiene, security,
-  performance) using the same rubrics and severity scale below. Write the results to the same
-  `<SCRATCH>/pr-review-out/<ASPECT>.json` files (same shape as item 6) so Step 3's merge logic
-  is unchanged.
-- **Not small → dispatch the 4 parallel Agents** as described below.
+  directly and produce findings for **all five aspects** (correctness, hygiene, security,
+  performance, efficiency) using the same rubrics and severity scale below. Write the results
+  to the same `<SCRATCH>/pr-review-out/<ASPECT>.json` files (same shape as item 6) so Step 3's
+  merge logic is unchanged.
+- **Not small → dispatch the 5 parallel Agents** as described below.
 
 ### Parallel path (non-small PRs)
 
-Dispatch **all four Agent calls in one message** so they run concurrently. Use
+Dispatch **all five Agent calls in one message** so they run concurrently. Use
 `subagent_type: "general-purpose"` for each (Explore is read-only and cannot write the JSON).
 First create `<SCRATCH>/pr-review-out/`.
 
 Model per aspect:
-- `model: "sonnet"` → **correctness**, **security**, **performance**
+- `model: "sonnet"` → **correctness**, **security**, **performance**, **efficiency**
 - `model: "haiku"` → **hygiene**
 
 Give every sub-agent this shared contract, substituting the scratchpad paths and the
@@ -144,10 +144,11 @@ Aspect rubrics:
 - **hygiene** — naming, readability, dead/duplicated code, structure, consistency with surrounding style, comment quality, obvious missing test coverage.
 - **security** — injection, auth/authz gaps, hardcoded secrets/credentials, unsafe deserialization, missing input validation, path traversal, risky or outdated dependencies.
 - **performance** — N+1 / redundant queries, unnecessary allocations or loops, algorithmic complexity, blocking I/O on hot paths, and whether the change effectively achieves its goal.
+- **efficiency** — code minimalism per the *Five Lines of Code* principle (Clausen): flag logic that can shrink while still covering every case — duplicated or overlapping conditionals, branches collapsible via guard clauses / early returns, functions mixing abstraction levels ("either call or pass, but not both"), `if` chains buried mid-function instead of leading it, methods far beyond ~5 lines doing several jobs, over-engineered abstraction for a single call site, redundant flags/state replaceable by direct returns. Target the **least logic that stays readable** — never propose code golf, dense one-liners, or cryptic names (`x`, `v`, `a`); a suggestion that reduces clarity is not a finding.
 
 ## Step 3 — Merge + verdict (you, Opus)
 
-1. Read all four `<SCRATCH>/pr-review-out/*.json`. If a file is missing/unparseable, note the
+1. Read all five `<SCRATCH>/pr-review-out/*.json`. If a file is missing/unparseable, note the
    aspect; if **more than half** failed, stop and ask the user to re-run.
 2. **De-duplicate**: when multiple aspects flag the same line/issue, keep the clearest write-up
    and tag it with every relevant aspect (e.g. `[correctness, security]`).
