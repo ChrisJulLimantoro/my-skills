@@ -24,6 +24,10 @@ declare -a NATIVE_GLOBAL=(
 )
 CURSOR_GLOBAL="${HOME}/.cursor/commands"
 
+# Global Claude Code memory (personal preferences applied to every project).
+GLOBAL_CLAUDE_MD_SRC="${REPO_ROOT}/global/CLAUDE.md"
+GLOBAL_CLAUDE_MD_DEST="${HOME}/.claude/CLAUDE.md"
+
 # In-repo (project-local) symlinks pointing at the canonical skills dir.
 declare -a NATIVE_LOCAL=(
     "${REPO_ROOT}/.claude/skills"
@@ -128,6 +132,14 @@ cmd_install_global() {
     done
     link_cursor_files "${CURSOR_GLOBAL}"
 
+    if [ -f "${GLOBAL_CLAUDE_MD_SRC}" ]; then
+        log ""
+        log "Wiring global Claude Code memory (~/.claude/CLAUDE.md)..."
+        # link_dir never clobbers a real file — if a personal CLAUDE.md already
+        # exists it is SKIPped; merge it into global/CLAUDE.md manually first.
+        link_dir "${GLOBAL_CLAUDE_MD_DEST}" "${GLOBAL_CLAUDE_MD_SRC}"
+    fi
+
     log ""
     log "Global install complete. Skills are available in Claude Code, Hermes, Codex,"
     log "OpenCode, and Cursor — in every project on this machine."
@@ -149,6 +161,9 @@ cmd_uninstall() {
         fi
     done
     unlink_cursor_files "${CURSOR_GLOBAL}"
+    if [ -L "${GLOBAL_CLAUDE_MD_DEST}" ] && [ "$(readlink "${GLOBAL_CLAUDE_MD_DEST}")" = "${GLOBAL_CLAUDE_MD_SRC}" ]; then
+        rm "${GLOBAL_CLAUDE_MD_DEST}"; log "  removed ${GLOBAL_CLAUDE_MD_DEST}"
+    fi
     log "Uninstall complete. The repo's skills/ directory is untouched."
 }
 

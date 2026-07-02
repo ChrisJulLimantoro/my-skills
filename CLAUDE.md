@@ -12,6 +12,7 @@ skills/<skill-name>/SKILL.md   — canonical skill definitions (edit ONLY here)
 dist/cursor/commands/<name>.md — generated Cursor commands (gitignored, via build-cursor.sh)
 scripts/setup.sh               — installs into all five tools (symlinks + generated files)
 scripts/build-cursor.sh        — SKILL.md → Cursor command generator
+global/CLAUDE.md               — global Claude Code memory; `--global` symlinks ~/.claude/CLAUDE.md here
 ```
 
 Four tools (Claude Code, Hermes, Codex, OpenCode) read `SKILL.md` natively and are wired by

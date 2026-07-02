@@ -52,8 +52,9 @@ make install-global
 ```
 
 That wires `~/.claude/skills`, `~/.hermes/skills`, `~/.codex/skills`,
-`~/.config/opencode/skills` to this repo's `skills/` directory and links generated Cursor
-commands into `~/.cursor/commands/`.
+`~/.config/opencode/skills` to this repo's `skills/` directory, links generated Cursor
+commands into `~/.cursor/commands/`, and symlinks `~/.claude/CLAUDE.md` →
+`global/CLAUDE.md` (global Claude Code memory, see below).
 
 **Per-project only** (no changes to your home directory):
 
@@ -78,6 +79,24 @@ This creates in-repo symlinks (`.claude/skills`, `.opencode/skills`, `.agents/sk
 
 The same flags work on the script directly: `bash scripts/setup.sh [--global | --uninstall |
 --list | --new <name>]`.
+
+## Global CLAUDE.md (personal preferences, every project)
+
+`global/CLAUDE.md` is the version-controlled copy of `~/.claude/CLAUDE.md` — Claude Code's
+**user-level memory**, loaded into every session in every project. It carries:
+
+- **Communication** — extreme concision, grammar sacrificed for brevity
+- **Coding Style** — the *Five Lines of Code* principle (Clausen): least logic that covers
+  every case while staying readable; ~5-line functions; guard clauses first; one abstraction
+  level per function; never code golf or cryptic names
+- **Hard rules** — no AI attribution in commits, never read `.env` files
+- Skill trigger wiring (e.g. `/graphify`)
+
+**Setup:** `make install-global` symlinks `~/.claude/CLAUDE.md` → `global/CLAUDE.md`
+automatically. If a real (non-symlink) `~/.claude/CLAUDE.md` already exists it is **skipped**,
+not clobbered — merge its content into `global/CLAUDE.md` first, delete the original, then
+re-run. Edit preferences in `global/CLAUDE.md` only; every session picks the change up
+instantly through the symlink. `make uninstall` removes the symlink.
 
 ## Available Skills (16)
 
@@ -111,6 +130,7 @@ scripts/setup.sh               — installer / symlink manager for all five tool
 scripts/build-cursor.sh        — SKILL.md → Cursor command generator
 Makefile                       — convenience targets
 CLAUDE.md                      — project instructions for Claude Code
+global/CLAUDE.md               — global Claude Code memory (~/.claude/CLAUDE.md symlink target)
 ```
 
 The in-repo tool symlinks (`.claude/skills`, `.opencode/skills`, `.agents/skills`,
