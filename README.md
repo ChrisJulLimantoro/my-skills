@@ -79,11 +79,11 @@ This creates in-repo symlinks (`.claude/skills`, `.opencode/skills`, `.agents/sk
 The same flags work on the script directly: `bash scripts/setup.sh [--global | --uninstall |
 --list | --new <name>]`.
 
-## Available Skills (14)
+## Available Skills (16)
 
 | Skill | What it does |
 |---|---|
-| `codereview` | 4-parallel-reviewer local diff review → ranked report + verdict |
+| `codereview` | 5-parallel-reviewer local diff review (correctness, hygiene, security, performance, efficiency) → ranked report + verdict |
 | `command-development` | Guidance for authoring Claude Code slash commands |
 | `creative-ui` | Visual design: color palettes, typography, spacing, motion |
 | `deep-research` | Multi-source research → `EXPLORATION_REPORT.md` with conflict synthesis |
@@ -93,7 +93,9 @@ The same flags work on the script directly: `bash scripts/setup.sh [--global | -
 | `hook-development` | Author Claude Code plugin hooks (PreToolUse/PostToolUse/etc.) |
 | `plugin-settings` | The `.local.md` pattern for configurable plugin settings |
 | `plugin-structure` | Scaffold and organize a Claude Code plugin |
-| `pr-review` | End-to-end GitHub PR review with inline comments via `gh` |
+| `pr-comment` | Draft a PR description (`PR-COMMENT.md`) from the branch diff + repo template |
+| `pr-feedback` | Fetch + validate reviews on your own PR, verdict table, decide responses |
+| `pr-review` | End-to-end 5-aspect GitHub PR review with inline comments via `gh` |
 | `skill-creator` | Interview-driven authoring of a new `SKILL.md` |
 | `skill-development` | Guidance and best practices for writing skills |
 | `weekly-report` | GitHub + Calendar + Gmail → weekly report synced to Google Docs |
