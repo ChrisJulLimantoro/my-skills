@@ -1,100 +1,100 @@
 ---
 name: deep-research
-description: This skill should be used when the user asks to "explore", "do a deep dive", "research in depth", "investigate", "survey the landscape of", or starts a request with "Exploration:" or "Deep Dive:". Conducts exhaustive multi-source research and produces a structured EXPLORATION_REPORT.md with conflict synthesis and gap analysis.
-version: 0.1.0
+description: This skill should be used when the user asks to "deep research", "do a deep dive", "research in depth", "investigate", "survey the landscape of", "combine research", "multi-agent deep research", or "deep research report". Orchestrates multi-agent deep research — generates intensive per-agent research prompts (Claude, ChatGPT, Gemini, others), runs Claude's own research leg, then combines all deep-research-<agent>.md results into a single structured deep-research-report.md.
+version: 1.0.0
 ---
 
-# Deep Research
+# Deep Research (Multi-Agent Orchestrator)
 
-Conduct exhaustive, multi-source research and synthesize findings into a structured EXPLORATION_REPORT.md.
+Coordinate deep research across multiple AI research agents and synthesize their outputs into one research report.
 
-## Phase 1 — Source Discovery (minimum 8 unique sources)
+## Setup — Inputs and Mode Detection
 
-Search across diverse, orthogonal source categories. Do not cluster sources within a single domain:
+Gather from the prompt (ask only if missing and undeterminable):
+- **Topic** — the research question.
+- **Objective type** — technology survey / adopt-vs-not decision / comparison / feasibility. This shapes the final action items.
+- **Sources or source directory** — if a directory of prior material is given, read it before generating prompts.
+- **Research directory** — where result files live and outputs are written. Default: current working directory.
+- **Agent roster** — default: `claude`, `chatgpt`, `gemini`; add more if named (e.g., `perplexity`, `grok`).
 
-| Category | Examples |
+Detect the phase:
+- Directory contains ≥2 `deep-research-<agent>.md` result files → **Phase 2 (Synthesis)**.
+- Otherwise → **Phase 1 (Fan-out)**.
+- Explicit user words override detection: "plan"/"prompts" forces Phase 1; "combine"/"report"/"synthesize" forces Phase 2.
+
+## Phase 1 — Prompt Fan-out + Own Research
+
+### 1. Record the plan
+
+Write `deep-research-plan.md` containing: topic, objective type, agent roster, expected result filenames (`deep-research-<agent>.md` each), and the date. Phase 2 in a later session reads this for context.
+
+### 2. Generate one prompt per agent
+
+Write `deep-research-prompts.md` with one copy-paste-ready section per agent. Overlapping coverage between agents is encouraged — it enables cross-validation in Phase 2. Each prompt must:
+
+- State the topic, the objective type, and that agent's specific angle or source emphasis. Assign angles that play to each platform's strengths (e.g., academic literature, industry/vendor material, community discourse, recent news) while requiring every agent to also cover the core question.
+- Require full **Six Thinking Hats** coverage:
+
+| Hat | Requirement in the prompt |
 |---|---|
-| Official documentation | Language specs, RFC documents, vendor docs |
-| Academic / research | arXiv, Google Scholar, ACM, IEEE |
-| Industry analysis | Analyst reports, company engineering blogs |
-| Community discourse | GitHub issues/discussions, Reddit, Hacker News threads |
-| Practitioner writing | Dev blogs, newsletters, conference talks |
-| Contrarian / critical | Critique articles, postmortems, "considered harmful" pieces |
-| Recent news | Release announcements, changelogs |
-| Adjacent domains | How similar problems are solved in related fields |
+| White | Hard facts, data, benchmarks, dates |
+| Red | Community sentiment, practitioner intuitions |
+| Black | Risks, criticism, failure stories, limitations |
+| Yellow | Benefits, opportunities, success stories |
+| Green | Alternatives, creative options, adjacent approaches |
+| Blue | Output must be a well-organized markdown paper |
 
-For each source, record:
-- URL or full citation
-- Publication date
-- Author or organization
-- Key claim or insight (one sentence)
+- Require for every source: URL or full citation, publication date, author/organization, and a one-sentence key insight.
+- Require at least one contrarian or critical source.
+- Instruct that the final output be a markdown paper named `deep-research-<agent>.md`.
 
-**Minimum**: 8 distinct sources from at least 4 different categories, including at least one contrarian or critical source.
+### 3. Run the Claude leg
 
-## Phase 2 — Conflict Synthesis
+Execute the `claude` prompt directly in this session and write `deep-research-claude.md`. Follow the same six-hats structure demanded of the other agents, plus these source rules:
 
-Identify where sources disagree. Conflicting viewpoints are as valuable as consensus:
+- Minimum **8 distinct sources** from at least **4 categories**: official documentation, academic/research, industry analysis, community discourse, practitioner writing, contrarian/critical, recent news, adjacent domains.
+- At least one contrarian or critical source.
+- Record URL, date, author, and key insight per source.
+- Document at least one genuine disagreement between sources: name it, summarize each position, assess evidence strength, and state where truth is genuinely uncertain — never a bare "it depends".
 
-1. Name the disagreement clearly (e.g., "Performance claim conflict between X and Y")
-2. Summarize each position with its source
-3. Assess which position has stronger evidence or more recent data
-4. Note where the truth is genuinely uncertain or context-dependent
+### 4. Hand off
 
-Do not paper over disagreements with "it depends" without specifying what it depends on.
+Tell the user to run the remaining prompts in their respective agents, drop the results into the research directory as `deep-research-<agent>.md`, then re-invoke `/deep-research` to combine.
 
-## Phase 3 — Output: EXPLORATION_REPORT.md
+## Phase 2 — Synthesis into deep-research-report.md
 
-Write the report to the current working directory using this structure:
+### 1. Ingest
 
-```markdown
-# Exploration Report: <Topic>
+Read `deep-research-plan.md` (if present) for topic and objective, then read every `deep-research-*.md` result file.
 
-**Date**: <ISO date>
-**Sources consulted**: <count>
+### 2. Cross-validate
 
-## Executive Summary
+Compare claims across the input files:
+- Where inputs agree, treat the claim as consensus and cite the strongest underlying source.
+- Where inputs conflict: name the disagreement, summarize each position with its underlying source, assess which has stronger or more recent evidence, and give a verdict — or state precisely what the answer depends on.
+- Deduplicate sources cited by multiple inputs.
 
-<3–5 sentences synthesizing the most important findings. Write this last.>
+### 3. Write the report
 
-## Landscape Map
+Write `deep-research-report.md`. The report must read like a human-authored research paper: never mention six hats, the input files, or which AI agent contributed what. Attribute claims to the underlying sources (websites, papers, docs) only.
 
-### Current State
-<What exists today, key players, dominant approaches>
+Fixed frame, with a body outline designed per topic:
 
-### Emerging Trends
-<What is changing, what is gaining or losing adoption>
+1. **Executive Summary** — written last, placed first. A fast, self-sufficient read: verdict or answer to the research question, the key reasons, and the main risk. A reader stopping here must already have the answer.
+2. **Body** — a topic-driven outline (e.g., background → landscape → comparison → trade-offs → risks), organized by idea, never by input file. Prefer tables for any comparison and Mermaid diagrams (flowchart, quadrantChart, timeline) over prose wherever the content allows. Present source conflicts with evidence and a verdict inside the relevant section.
+3. **Action Items / Recommendation** — shaped by the objective type:
+   - Adopt-vs-not → recommendation, pros/cons table, next steps.
+   - Technology survey → what to watch, what to try, what to skip.
+   - Comparison → the pick, and when to choose the alternative.
+   - Feasibility → go/no-go, blockers, prerequisites.
+4. **Terminologies** — term/definition table, always present, placed at the back of the report before references.
+5. **References** — deduplicated citations (URL, date) merged across all inputs.
 
-### Key Trade-offs
-<Core tensions practitioners navigate — be specific, not generic>
+### 4. Quality gates (internal — never printed in the report)
 
-## Gap Analysis
-
-### Unsolved Problems
-<What the field has not yet adequately addressed>
-
-### Conflicting Evidence
-<Where sources disagree and the nature of the disagreement>
-
-### Open Questions
-<What remains unknown, debated, or highly context-dependent>
-
-## Source Index
-
-| # | Source | Date | Key Insight |
-|---|---|---|---|
-| 1 | <citation or URL> | <date> | <one-sentence insight> |
-...
-
-## Methodology Notes
-
-<Caveats about source quality, recency gaps, coverage limitations, or search constraints>
-```
-
-## Quality Gates
-
-Before writing the report, verify:
-- At least 8 sources from at least 4 categories
-- At least one contrarian or critical source is included
-- At least one genuine conflict is documented in Phase 2
-- Executive Summary is written after all other sections are complete
-- No source is cited without a specific key insight attributed to it
+- Executive summary alone answers the research question.
+- Six-hats audit passes: facts, sentiment, risks, benefits, and alternatives are all covered somewhere in the body.
+- At least one table and one Mermaid diagram.
+- Terminologies section present, at the back.
+- Every major claim traceable to a cited source; conflicts resolved or precisely scoped, not papered over.
+- No agent names, input filenames, or six-hats vocabulary anywhere in the report.
