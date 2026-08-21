@@ -27,6 +27,9 @@ CURSOR_GLOBAL="${HOME}/.cursor/commands"
 # Global Claude Code memory (personal preferences applied to every project).
 GLOBAL_CLAUDE_MD_SRC="${REPO_ROOT}/global/CLAUDE.md"
 GLOBAL_CLAUDE_MD_DEST="${HOME}/.claude/CLAUDE.md"
+# Files that global/CLAUDE.md @-imports; they must sit beside it to resolve.
+GLOBAL_RTK_MD_SRC="${REPO_ROOT}/global/RTK.md"
+GLOBAL_RTK_MD_DEST="${HOME}/.claude/RTK.md"
 
 # In-repo (project-local) symlinks pointing at the canonical skills dir.
 declare -a NATIVE_LOCAL=(
@@ -140,6 +143,10 @@ cmd_install_global() {
         link_dir "${GLOBAL_CLAUDE_MD_DEST}" "${GLOBAL_CLAUDE_MD_SRC}"
     fi
 
+    if [ -f "${GLOBAL_RTK_MD_SRC}" ]; then
+        link_dir "${GLOBAL_RTK_MD_DEST}" "${GLOBAL_RTK_MD_SRC}"
+    fi
+
     log ""
     log "Global install complete. Skills are available in Claude Code, Hermes, Codex,"
     log "OpenCode, and Cursor — in every project on this machine."
@@ -163,6 +170,9 @@ cmd_uninstall() {
     unlink_cursor_files "${CURSOR_GLOBAL}"
     if [ -L "${GLOBAL_CLAUDE_MD_DEST}" ] && [ "$(readlink "${GLOBAL_CLAUDE_MD_DEST}")" = "${GLOBAL_CLAUDE_MD_SRC}" ]; then
         rm "${GLOBAL_CLAUDE_MD_DEST}"; log "  removed ${GLOBAL_CLAUDE_MD_DEST}"
+    fi
+    if [ -L "${GLOBAL_RTK_MD_DEST}" ] && [ "$(readlink "${GLOBAL_RTK_MD_DEST}")" = "${GLOBAL_RTK_MD_SRC}" ]; then
+        rm "${GLOBAL_RTK_MD_DEST}"; log "  removed ${GLOBAL_RTK_MD_DEST}"
     fi
     log "Uninstall complete. The repo's skills/ directory is untouched."
 }

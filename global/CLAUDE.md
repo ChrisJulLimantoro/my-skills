@@ -13,6 +13,18 @@ Follow the **Five Lines of Code** principle (Christian Clausen) as the default s
 - `if` belongs at the start of a function (guard clauses / early returns); avoid nested or buried branching.
 - Minimalism NEVER means code golf or cryptic names (`x`, `v`, `a`) — descriptive names and readable structure always win over saving characters.
 
+# Commit Messages
+- Format: `type(scope): title`, then bullet points summarizing the change.
+- Each bullet max 25 words.
+- Example:
+  ```
+  feat(prebuilt-web): add mobile responsiveness to the data
+
+  - added new page ...
+  ```
+
 # HARD RULES (NEVER violate)
 - NEVER add "Co-Authored-By: Claude" or any AI model attribution to commit messages, PRs, or any commit to git.
 - NEVER read any `.env` file except `.env.example`, on any occasions.
+
+@RTK.md
