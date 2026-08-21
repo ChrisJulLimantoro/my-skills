@@ -18,7 +18,7 @@ accomplishment summaries. Manual sections are gathered by asking the user intera
 ```
 GITHUB_OWNER: GDP-ADMIN
 GITHUB_USER:  chrisjulius-gdplabs
-REPOS:        glair-vision-engineering, glair-ocr, gl-sdk, glaip-sdk, ai-agent-platform, glair-vision-node-sdk, glair-vision-python-sdk, glair-vision-go, glair-vision-java
+REPOS:        glair-vision-engineering, glair-ocr, gl-sdk, glaip-sdk, ai-agent-platform, glair-vision-node-sdk, glair-vision-python-sdk, glair-vision-go, glair-vision-java, gl-sdk-cookbook
 AUTHOR_NAME:  Christopher Julius Limantoro
 TIMEZONE:     Asia/Jakarta (WIB, UTC+07:00)
 OUTPUT_DIR:   ~/.claude/skills/weekly-report/output
@@ -102,6 +102,14 @@ Then **summarize as Claude** into the report's house style — for each signific
 Group by repo if multiple. Build `deployments` and `prs_reviewed` as bullet lists of
 `<title> [<REPO>#<num>](<url>)` (indented two spaces). Use "* None" when a list is empty.
 
+Two traps:
+
+- `gh search prs --reviewed-by '@me'` also returns the author's **own** PRs. Request the
+  `author` field and drop any PR authored by `GITHUB_USER` before building `prs_reviewed`.
+- The shell is **zsh**, which does not word-split unquoted variables. `for R in $REPOS`
+  iterates once over the whole string. Write the repo list inline in the `for`, or use a
+  zsh array (`repos=(a b c); for R in $repos`).
+
 ### 3. Meetings — Google Calendar (OAuth)
 
 - Run `python3 OAUTH calendar --start <Mon 00:00 WIB ISO> --end <Fri 23:59:59 WIB ISO>`.
@@ -110,6 +118,7 @@ Group by repo if multiple. Build `deployments` and `prs_reviewed` as bullet list
   `eventType` `workingLocation`/`outOfOffice` and all-day "Out of office"/holiday noise
   unless meaningful.
 - Group by day, rendered as:
+
   ```
   * **Monday, Jan 5th, 2026**
     * 9:00 AM – 9:45 AM: <event title>
@@ -132,15 +141,26 @@ Group by repo if multiple. Build `deployments` and `prs_reviewed` as bullet list
 Gather these interactively. **Learning is NOT asked** — it stays the empty stub from the
 template.
 
-- **WFO days** — use AskUserQuestion, `multiSelect: true`, one option per weekday
-  Mon–Fri with its date (e.g. "Monday, Jan 5th"). Plus nothing-selected = none.
-- **Out-of-office days** — same checklist style, separate question (can combine with WFO
-  in one AskUserQuestion call as two questions).
+**AskUserQuestion allows at most 4 options per question.** A Mon–Fri checklist does not
+fit in one question — Friday silently disappears. Split the days across two questions.
+
+- **WFO days** — two AskUserQuestion questions, both `multiSelect: true`:
+    - Q1 "Which days did you work from office?" → 4 options: Monday, Tuesday, Wednesday,
+      Thursday (each with its date, e.g. "Monday, Jan 5th").
+    - Q2 "Any more WFO days, and which days were you out of office?" → options:
+      "WFO Friday, <date>", "OOO: none", "OOO: one or more days".
+    - If Q2 selects "OOO: one or more days", follow up with a separate question listing
+      the weekdays (≤ 4 options per question) to pin down which.
+    - Nothing selected = none.
 - **Issues** — ask for current issues/blockers (free text; "None" allowed).
 - **Next Actions** — ask for upcoming tasks (free text; "None" allowed).
-- **Key Metrics / OMTM** — ask for the OMTM line(s).
-- **Bug counts** — ask for: major & minor bugs this **month**, and major & minor bugs this
-  **half-year** (H1 = Jan–Jun, H2 = Jul–Dec of the current year).
+- **Key Metrics / OMTM** — ask for the OMTM line(s). Users often paste a long multi-line
+  block here; the UI strips newlines, so reflow it into markdown bullets when rendering.
+- **Bug counts** — ask **in its own AskUserQuestion call, after OMTM is answered**: major &
+  minor bugs this **month**, and major & minor bugs this **half-year** (H1 = Jan–Jun,
+  H2 = Jul–Dec of the current year). Asking it alongside OMTM invites the user to paste the
+  same block into both. These are bugs reported against the author's own work — never
+  derive them from an OMTM bug table (P0/P1/P2 do not map to Major/Minor); ask.
 
 Format multi-item answers as markdown bullet lists; render selected WFO/OOO days as
 `* Monday, Jan 5th, 2026` lines (or "None").
