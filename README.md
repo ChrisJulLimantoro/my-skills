@@ -98,7 +98,7 @@ not clobbered — merge its content into `global/CLAUDE.md` first, delete the or
 re-run. Edit preferences in `global/CLAUDE.md` only; every session picks the change up
 instantly through the symlink. `make uninstall` removes the symlink.
 
-## Available Skills (17)
+## Available Skills (18)
 
 | Skill | What it does |
 |---|---|
@@ -116,6 +116,7 @@ instantly through the symlink. `make uninstall` removes the symlink.
 | `pr-feedback` | Fetch + validate reviews on your own PR, verdict table, decide responses |
 | `pr-review` | End-to-end 5-aspect GitHub PR review with inline comments via `gh` |
 | `readme-update` | Rewrite `README.md` from the repo's template + verified repo state |
+| `receiving-code-review` | Evaluate review feedback technically — verify before implementing, ask before assuming |
 | `skill-creator` | Interview-driven authoring of a new `SKILL.md` |
 | `skill-development` | Guidance and best practices for writing skills |
 | `weekly-report` | GitHub + Calendar + Gmail → weekly report synced to Google Docs |
