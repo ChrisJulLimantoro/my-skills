@@ -1,0 +1,4 @@
+interface:
+  display_name: "Devi Error Batch Tracker"
+  short_description: "Track evidence-backed Devi run investigations"
+  default_prompt: "Use $devi-error-batch-tracker to investigate these Devi links and update my findings ledger."
