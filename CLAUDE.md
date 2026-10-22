@@ -12,7 +12,9 @@ skills/<skill-name>/SKILL.md   — canonical skill definitions (edit ONLY here)
 dist/cursor/commands/<name>.md — generated Cursor commands (gitignored, via build-cursor.sh)
 scripts/setup.sh               — installs into all five tools (symlinks + generated files)
 scripts/build-cursor.sh        — SKILL.md → Cursor command generator
-global/CLAUDE.md               — global Claude Code memory; `--global` symlinks ~/.claude/CLAUDE.md here
+global/AGENTS.md               — shared global rules; `--global` symlinks ~/.claude, ~/.codex, ~/.config/opencode AGENTS.md here
+global/CLAUDE.md               — Claude-only global memory (@-imports AGENTS.md, RTK.md); ~/.claude/CLAUDE.md links here
+global/RTK.md                  — rtk notes imported by global/CLAUDE.md; ~/.claude/RTK.md links here
 ```
 
 Four tools (Claude Code, Hermes, Codex, OpenCode) read `SKILL.md` natively and are wired by
@@ -25,12 +27,14 @@ skill change, run `bash scripts/setup.sh` (or `make build`) to refresh the Curso
 The in-repo tool symlinks (`.claude/skills`, `.opencode/skills`, `.agents/skills`,
 `.cursor/commands`) and `dist/` are gitignored — `make install` recreates them.
 
-## Skills Included (18)
+## Skills Included (22)
 
-`codereview`, `command-development`, `creative-ui`, `deep-research`, `find-skills`,
-`frontend-design`, `graphify`, `hook-development`, `plugin-settings`, `plugin-structure`,
-`pr-comment`, `pr-feedback`, `pr-review`, `readme-update`, `receiving-code-review`,
-`skill-creator`, `skill-development`, `weekly-report`.
+`caveman`, `codereview`, `command-development`, `creative-ui`, `deep-research`,
+`devi-error-batch-tracker`, `devi-error-link-debugging`, `find-skills`, `frontend-design`,
+`graphify`, `hook-development`, `plugin-settings`, `plugin-structure`, `pr-comment`,
+`pr-feedback`, `pr-review` (6-aspect incl. testing; local and report-only modes),
+`readme-update`, `receiving-code-review`, `sentry-cli`, `skill-creator`, `skill-development`,
+`weekly-report`.
 
 Run `make list` for descriptions.
 
@@ -72,3 +76,9 @@ make uninstall       # remove global symlinks + generated Cursor links
 `make install-global` symlinks `~/.claude/skills`, `~/.hermes/skills`, `~/.codex/skills`,
 `~/.config/opencode/skills` → this repo's `skills/`, and links generated commands into
 `~/.cursor/commands/`.
+
+It also links the global memory files: `~/.claude/CLAUDE.md` → `global/CLAUDE.md`,
+`~/.claude/RTK.md` → `global/RTK.md`, and `~/.claude/AGENTS.md`, `$CODEX_HOME/AGENTS.md`
+(default `~/.codex`), `~/.config/opencode/AGENTS.md` → `global/AGENTS.md`. Real files at those
+paths are skipped, never clobbered; `make uninstall` removes only links pointing at `global/`.
+Edit shared rules in `global/AGENTS.md`; keep `global/CLAUDE.md` for Claude-only wiring.

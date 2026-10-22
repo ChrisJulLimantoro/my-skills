@@ -53,8 +53,8 @@ make install-global
 
 That wires `~/.claude/skills`, `~/.hermes/skills`, `~/.codex/skills`,
 `~/.config/opencode/skills` to this repo's `skills/` directory, links generated Cursor
-commands into `~/.cursor/commands/`, and symlinks `~/.claude/CLAUDE.md` →
-`global/CLAUDE.md` (global Claude Code memory, see below).
+commands into `~/.cursor/commands/`, and symlinks the global memory files in `global/`
+(`AGENTS.md`, `CLAUDE.md`, `RTK.md`) into Claude Code, Codex, and OpenCode (see below).
 
 **Per-project only** (no changes to your home directory):
 
@@ -80,32 +80,51 @@ This creates in-repo symlinks (`.claude/skills`, `.opencode/skills`, `.agents/sk
 The same flags work on the script directly: `bash scripts/setup.sh [--global | --uninstall |
 --list | --new <name>]`.
 
-## Global CLAUDE.md (personal preferences, every project)
+## Global AGENTS.md (personal preferences, every project)
 
-`global/CLAUDE.md` is the version-controlled copy of `~/.claude/CLAUDE.md` — Claude Code's
-**user-level memory**, loaded into every session in every project. It carries:
+`global/AGENTS.md` is the single, tool-neutral source of the personal rules loaded into every
+session in every project, by Claude Code, Codex, and OpenCode alike. It carries:
 
 - **Communication** — extreme concision, grammar sacrificed for brevity
+- **Caveman** — caveman-style chat replies; never for files written to disk
+- **Shell** — prefix shell commands with `rtk` when installed
 - **Coding Style** — the *Five Lines of Code* principle (Clausen): least logic that covers
   every case while staying readable; ~5-line functions; guard clauses first; one abstraction
   level per function; never code golf or cryptic names
+- **Commit messages** — `type(scope): title` plus short bullets
+- **Task workflow** — plan → explicit go → implement sub-agent → review sub-agent (`pr-review`),
+  with a plan template and quality gates; sub-agent steps are phrased per tool
 - **Hard rules** — no AI attribution in commits, never read `.env` files
-- Skill trigger wiring (e.g. `/graphify`)
 
-**Setup:** `make install-global` symlinks `~/.claude/CLAUDE.md` → `global/CLAUDE.md`
-automatically. If a real (non-symlink) `~/.claude/CLAUDE.md` already exists it is **skipped**,
-not clobbered — merge its content into `global/CLAUDE.md` first, delete the original, then
-re-run. Edit preferences in `global/CLAUDE.md` only; every session picks the change up
-instantly through the symlink. `make uninstall` removes the symlink.
+`global/CLAUDE.md` holds only Claude-specific bits (skill trigger wiring such as `/graphify`)
+and imports the rest with `@AGENTS.md` and `@RTK.md`.
 
-## Available Skills (18)
+| Global file | Symlink target | Loaded by |
+|---|---|---|
+| `~/.claude/CLAUDE.md` | `global/CLAUDE.md` | Claude Code (user memory) |
+| `~/.claude/AGENTS.md` | `global/AGENTS.md` | Claude Code, via `@AGENTS.md` in `CLAUDE.md` |
+| `~/.claude/RTK.md` | `global/RTK.md` | Claude Code, via `@RTK.md` in `CLAUDE.md` |
+| `~/.codex/AGENTS.md` (`$CODEX_HOME`) | `global/AGENTS.md` | Codex (global instructions) |
+| `~/.config/opencode/AGENTS.md` | `global/AGENTS.md` | OpenCode (global rules) |
+
+**Setup:** `make install-global` creates these symlinks automatically. If a real (non-symlink)
+file already exists at one of the paths it is **skipped**, not clobbered — merge its content
+into `global/` first, move the original aside (e.g. `mv ~/.codex/AGENTS.md
+~/.codex/AGENTS.md.bak`), then re-run. Edit preferences in `global/` only; every tool picks the
+change up instantly through the symlinks. `make uninstall` removes only symlinks that point at
+this repo's `global/` files.
+
+## Available Skills (22)
 
 | Skill | What it does |
 |---|---|
+| `caveman` | Ultra-compressed communication mode (lite/full/ultra intensities) to cut output tokens |
 | `codereview` | 5-parallel-reviewer local diff review (correctness, hygiene, security, performance, efficiency) → ranked report + verdict |
 | `command-development` | Guidance for authoring Claude Code slash commands |
 | `creative-ui` | Visual design: color palettes, typography, spacing, motion |
 | `deep-research` | Multi-source research → `EXPLORATION_REPORT.md` with conflict synthesis |
+| `devi-error-batch-tracker` | Investigate many Devi/OpenCode workflow links and keep a local Markdown findings ledger |
+| `devi-error-link-debugging` | Debug one Devi/OpenCode workflow failure from its artifacts (SQLite WAL replay, logs) |
 | `find-skills` | Discover and install agent skills by intent |
 | `frontend-design` | Distinctive, production-grade frontend interfaces |
 | `graphify` | Any input → knowledge graph → clustered communities + HTML/JSON/report |
@@ -114,9 +133,10 @@ instantly through the symlink. `make uninstall` removes the symlink.
 | `plugin-structure` | Scaffold and organize a Claude Code plugin |
 | `pr-comment` | Draft a PR description (`PR-COMMENT.md`) from the branch diff + repo template |
 | `pr-feedback` | Fetch + validate reviews on your own PR, verdict table, decide responses |
-| `pr-review` | End-to-end 5-aspect GitHub PR review with inline comments via `gh` |
+| `pr-review` | End-to-end 6-aspect GitHub PR review (incl. testing: unit tests, new-code coverage, pre-commit/ruff) with inline comments via `gh`; local mode (no PR yet) and report-only mode |
 | `readme-update` | Rewrite `README.md` from the repo's template + verified repo state |
 | `receiving-code-review` | Evaluate review feedback technically — verify before implementing, ask before assuming |
+| `sentry-cli` | Use the Sentry CLI to view issues, events, projects, and call the API |
 | `skill-creator` | Interview-driven authoring of a new `SKILL.md` |
 | `skill-development` | Guidance and best practices for writing skills |
 | `weekly-report` | GitHub + Calendar + Gmail → weekly report synced to Google Docs |
@@ -132,7 +152,9 @@ scripts/setup.sh               — installer / symlink manager for all five tool
 scripts/build-cursor.sh        — SKILL.md → Cursor command generator
 Makefile                       — convenience targets
 CLAUDE.md                      — project instructions for Claude Code
-global/CLAUDE.md               — global Claude Code memory (~/.claude/CLAUDE.md symlink target)
+global/AGENTS.md               — shared global rules (Claude Code, Codex, OpenCode symlink target)
+global/CLAUDE.md               — Claude-only global memory; imports AGENTS.md and RTK.md
+global/RTK.md                  — rtk usage notes imported by global/CLAUDE.md
 ```
 
 The in-repo tool symlinks (`.claude/skills`, `.opencode/skills`, `.agents/skills`,

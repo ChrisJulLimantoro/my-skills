@@ -25,3 +25,6 @@ skills/devi-error-batch-tracker/output/
 # Tool-managed skill caches (auto-synced; third-party licensed, not ours to redistribute)
 skills/synced/
 skills/.system/
+
+# Local task plans (never commit)
+plan-*.md

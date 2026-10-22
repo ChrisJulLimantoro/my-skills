@@ -11,10 +11,10 @@ install: ## Set up skills for this project only (symlinks + Cursor commands)
 build: ## Regenerate Cursor commands from skills/*/SKILL.md
 	bash scripts/build-cursor.sh
 
-install-global: ## Install skills globally (~/.claude/skills symlink)
+install-global: ## Link skills + AGENTS.md (all tools), CLAUDE.md/RTK.md (Claude)
 	bash scripts/setup.sh --global
 
-uninstall: ## Remove the global ~/.claude/skills symlink
+uninstall: ## Remove global skills + instruction-file links (all tools)
 	bash scripts/setup.sh --uninstall
 
 list: ## List all installed skills

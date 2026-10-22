@@ -24,12 +24,17 @@ declare -a NATIVE_GLOBAL=(
 )
 CURSOR_GLOBAL="${HOME}/.cursor/commands"
 
-# Global Claude Code memory (personal preferences applied to every project).
-GLOBAL_CLAUDE_MD_SRC="${REPO_ROOT}/global/CLAUDE.md"
-GLOBAL_CLAUDE_MD_DEST="${HOME}/.claude/CLAUDE.md"
-# Files that global/CLAUDE.md @-imports; they must sit beside it to resolve.
-GLOBAL_RTK_MD_SRC="${REPO_ROOT}/global/RTK.md"
-GLOBAL_RTK_MD_DEST="${HOME}/.claude/RTK.md"
+# Global memory files (personal preferences applied to every project), as "dest=src".
+# global/AGENTS.md holds the shared rules for every tool; global/CLAUDE.md @-imports
+# AGENTS.md and RTK.md, so both must also sit beside ~/.claude/CLAUDE.md to resolve.
+GLOBAL_DIR="${REPO_ROOT}/global"
+declare -a GLOBAL_MEMORY=(
+    "${HOME}/.claude/CLAUDE.md=${GLOBAL_DIR}/CLAUDE.md"
+    "${HOME}/.claude/RTK.md=${GLOBAL_DIR}/RTK.md"
+    "${HOME}/.claude/AGENTS.md=${GLOBAL_DIR}/AGENTS.md"
+    "${CODEX_HOME}/AGENTS.md=${GLOBAL_DIR}/AGENTS.md"
+    "${HOME}/.config/opencode/AGENTS.md=${GLOBAL_DIR}/AGENTS.md"
+)
 
 # In-repo (project-local) symlinks pointing at the canonical skills dir.
 declare -a NATIVE_LOCAL=(
@@ -107,6 +112,38 @@ unlink_cursor_files() {
     done
 }
 
+# link_global_memory — link each global memory file; real files are SKIPped, never clobbered.
+link_global_memory() {
+    log "Wiring global memory files (CLAUDE.md, RTK.md, AGENTS.md)..."
+    local entry
+    for entry in "${GLOBAL_MEMORY[@]}"; do
+        link_memory_file "${entry%%=*}" "${entry#*=}"
+    done
+}
+
+# link_memory_file <dest> <src> — link <dest> to <src>, SKIPping when <src> is not a regular file.
+link_memory_file() {
+    local dest="$1" src="$2"
+    [ -f "${src}" ] || { log "  SKIP ${dest} (source ${src} missing)"; return 0; }
+    link_dir "${dest}" "${src}"
+}
+
+# unlink_global_memory — remove only the memory links that point at this repo's global/ files.
+unlink_global_memory() {
+    local entry
+    for entry in "${GLOBAL_MEMORY[@]}"; do
+        unlink_if_ours "${entry%%=*}" "${entry#*=}"
+    done
+}
+
+# unlink_if_ours <link_path> <target> — remove the symlink only if it points at <target>.
+unlink_if_ours() {
+    local link="$1" target="$2"
+    [ -L "${link}" ] || return 0
+    [ "$(readlink "${link}")" = "${target}" ] || return 0
+    rm "${link}"; log "  removed ${link}"
+}
+
 # ── Commands ──────────────────────────────────────────────────────────────────
 
 cmd_install() {
@@ -135,17 +172,8 @@ cmd_install_global() {
     done
     link_cursor_files "${CURSOR_GLOBAL}"
 
-    if [ -f "${GLOBAL_CLAUDE_MD_SRC}" ]; then
-        log ""
-        log "Wiring global Claude Code memory (~/.claude/CLAUDE.md)..."
-        # link_dir never clobbers a real file — if a personal CLAUDE.md already
-        # exists it is SKIPped; merge it into global/CLAUDE.md manually first.
-        link_dir "${GLOBAL_CLAUDE_MD_DEST}" "${GLOBAL_CLAUDE_MD_SRC}"
-    fi
-
-    if [ -f "${GLOBAL_RTK_MD_SRC}" ]; then
-        link_dir "${GLOBAL_RTK_MD_DEST}" "${GLOBAL_RTK_MD_SRC}"
-    fi
+    log ""
+    link_global_memory
 
     log ""
     log "Global install complete. Skills are available in Claude Code, Hermes, Codex,"
@@ -168,12 +196,7 @@ cmd_uninstall() {
         fi
     done
     unlink_cursor_files "${CURSOR_GLOBAL}"
-    if [ -L "${GLOBAL_CLAUDE_MD_DEST}" ] && [ "$(readlink "${GLOBAL_CLAUDE_MD_DEST}")" = "${GLOBAL_CLAUDE_MD_SRC}" ]; then
-        rm "${GLOBAL_CLAUDE_MD_DEST}"; log "  removed ${GLOBAL_CLAUDE_MD_DEST}"
-    fi
-    if [ -L "${GLOBAL_RTK_MD_DEST}" ] && [ "$(readlink "${GLOBAL_RTK_MD_DEST}")" = "${GLOBAL_RTK_MD_SRC}" ]; then
-        rm "${GLOBAL_RTK_MD_DEST}"; log "  removed ${GLOBAL_RTK_MD_DEST}"
-    fi
+    unlink_global_memory
     log "Uninstall complete. The repo's skills/ directory is untouched."
 }
 
