@@ -16,9 +16,7 @@ accomplishment summaries. Manual sections are gathered by asking the user intera
 ## CONFIG (edit these values to set up)
 
 ```
-GITHUB_OWNER: GDP-ADMIN
-GITHUB_USER:  chrisjulius-gdplabs
-REPOS:        glair-vision-engineering, glair-ocr, gl-sdk, glaip-sdk, ai-agent-platform, glair-vision-node-sdk, glair-vision-python-sdk, glair-vision-go, glair-vision-java, gl-sdk-cookbook
+GITHUB_USER:  auto  # resolve from the authenticated `gh` account; override only when needed
 AUTHOR_NAME:  Christopher Julius Limantoro
 TIMEZONE:     Asia/Jakarta (WIB, UTC+07:00)
 OUTPUT_DIR:   ~/.claude/skills/weekly-report/output
@@ -28,8 +26,9 @@ OAUTH:        ~/.claude/skills/weekly-report/google_oauth.py
 
 **Prerequisites** (one-time):
 
-- `gh` CLI installed and authenticated (`gh auth status`). Scopes need `repo` + `read:org`.
-  No GitHub token is stored in this skill — `gh` provides it.
+- `gh` CLI installed and authenticated (`gh auth status`). The token must be able to read
+  every repository that should appear in the report; `repo` + `read:org` are sufficient for
+  the private repositories in scope. No GitHub token is stored in this skill — `gh` provides it.
 - Python 3 with `google-auth`, `google-auth-oauthlib`, and `google-api-python-client`
   installed (`pip install google-auth google-auth-oauthlib google-api-python-client`).
 - A Google OAuth **client-secret JSON** for a Desktop/Installed app, with these APIs
@@ -73,23 +72,157 @@ time as WIB.
 - The report `period` string is `DD Mon YYYY - DD Mon YYYY` (Monday – Friday).
 - Tell the user the period you're generating for.
 
-### 2. GitHub activity (via `gh` — no token needed)
+### Active PR definition
 
-For each repo in `REPOS`, using `GITHUB_OWNER`/`GITHUB_USER` and the window from step 1:
+Treat a PR as active only when at least one qualifying account event falls inside exact UTC
+`since`/`until`: PR creation (`created_at`), an account-authored or account-committed PR
+commit, a review submitted by the account (`submitted_at`), a conversation or inline review
+comment authored by the account (`created_at`), or a merge (`merged_at`) of a connected PR.
+Use `updated_at` and `involves` only to discover candidates; never use them alone as activity
+proof.
 
-- **Authored PRs** (for Accomplishments):
-  `gh pr list --repo $OWNER/$REPO --author '@me' --search "updated:>=<MON-DATE>" --state all --json number,title,url,state,body,mergedAt,updatedAt`
-- **Commits**:
-  `gh api "repos/$OWNER/$REPO/commits?author=$GITHUB_USER&since=<ISO>&until=<ISO>" --jq '.[].commit.message'`
-  (Use commits to catch un-PR'd work; dedupe against PR titles.)
-- **Deployments** = the authored PRs whose `mergedAt` falls inside the window.
-- **Reviewed PRs**:
-  `gh search prs --reviewed-by '@me' --owner $OWNER --updated ">=<MON-DATE>" --json repository,number,title,url`
-  (filter to the configured repos).
+After event validation, exclude `state: closed` unless `merged_at` itself falls inside the
+window. Closed, unmerged PRs never appear. A PR merged during the window remains active even
+though GitHub marks it closed. A PR closed after an in-window creation, commit, review, or comment
+is excluded when no in-window merge exists.
 
-Run repos in parallel where practical. Skip repos that error (e.g. no access) and note them.
+### 2. GitHub activity (account-wide via `gh api`)
 
-Then **summarize as Claude** into the report's house style — for each significant PR:
+Do not fetch all account PRs and sort them locally. Use server-side search qualifiers for every
+candidate query, then apply exact UTC timestamp checks locally. Search date ranges are coarse day
+bounds; event timestamps decide whether a PR is active. Use range syntax
+`YYYY-MM-DD..YYYY-MM-DD`, not separate `>=` and `<=` qualifiers.
+
+Resolve account with `gh api user --jq '.login'`. Use configured `GITHUB_USER` only when it
+intentionally differs from the authenticated account. Search every repository visible to that
+account. Use `--method GET`, `--paginate`, and `per_page=100`. Request lightweight fields only;
+never include `body` in candidate output.
+
+```sh
+GH_API_HEADERS=(-H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28')
+
+gh api --method GET --paginate search/issues "${GH_API_HEADERS[@]}" \
+  -f q="is:pr <QUALIFIERS>" \
+  -F per_page=100 \
+  --jq '.items[] | {repository: (.repository_url | sub("^.*/repos/"; "")), number, title, url: .html_url, author: .user.login, state, created_at, closed_at, updated_at}'
+```
+
+Set `END_DATE` to Friday when running after Friday; otherwise use today's date. Filter candidate
+timestamps against exact UTC `since` and `until`. Run filtered searches sequentially, honor
+`Retry-After`, and back off/retry on secondary-rate-limit responses. Keep stable key
+`<repository full name>#<number>`.
+
+Run only these filtered searches:
+
+- **Created:** `is:pr author:${GITHUB_USER} created:${MON_DATE}..${END_DATE}`. Finds creation events and authored
+  accomplishment candidates.
+- **Merged:** `is:pr involves:${GITHUB_USER} merged:${MON_DATE}..${END_DATE}`. Finds connected merge events,
+  including PRs now closed. Filter `author == GITHUB_USER` for `deployments`.
+- **Reviewed:** `is:pr reviewed-by:${GITHUB_USER} updated:${MON_DATE}..${END_DATE}`. `updated` is only
+  a candidate bound; validate review `submitted_at` exactly.
+- **Open involved:** `is:pr is:open involves:${GITHUB_USER} updated:${MON_DATE}..${END_DATE}`. Residual commit or
+  comment candidates only.
+- **Open authored:** `is:pr is:open author:${GITHUB_USER}`. Mandatory Next Actions query; prevents old open
+  authored PRs from being missed.
+
+Do not search `review-requested` for activity: a request is not a qualifying event. Do not run global
+`search/commits` queries in the default flow.
+
+The merged search replaces separate connected-merged and author-merged searches. Hydrate only
+merged candidates, closed candidates needing merge-state validation, and final authored
+accomplishment PRs. Search records are sufficient for reviewed output and open-PR links:
+
+```sh
+gh api --method GET --paginate search/issues "${GH_API_HEADERS[@]}" \
+  -f q="is:pr involves:${GITHUB_USER} merged:${MON_DATE}..${END_DATE}" \
+  -F per_page=100 \
+  --jq '.items[] | {repository: (.repository_url | sub("^.*/repos/"; "")), number, title, url: .html_url, author: .user.login, state, closed_at, updated_at}'
+```
+
+Hydrate selected PRs with authoritative `created_at`, `closed_at`, and `merged_at`. Request
+`body` only for authored PRs that will be summarized:
+
+```sh
+gh api "repos/${REPOSITORY}/pulls/${NUMBER}" "${GH_API_HEADERS[@]}" \
+  --jq '{number, title, html_url, body, state, draft, user: .user.login, created_at, closed_at, merged_at, updated_at, additions, deletions, changed_files}'
+```
+
+#### Review validation and output
+
+Use one paginated GraphQL request through `gh api` for reviewed candidates. Request PR identity, PR author,
+review author, and review timestamp only:
+
+```sh
+gh api graphql --paginate \
+  -f query='query($q:String!, $endCursor:String) {
+    search(query:$q, type:ISSUE, first:100, after:$endCursor) {
+      nodes {
+        ... on PullRequest {
+          repository { nameWithOwner }
+          number
+          title
+          url
+          author { login }
+          reviews(last:100) {
+            totalCount
+            nodes { author { login } submittedAt }
+          }
+        }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+  }' \
+  -F q="is:pr reviewed-by:${GITHUB_USER} updated:${MON_DATE}..${END_DATE}"
+```
+
+Keep review nodes where `author.login == GITHUB_USER` and `submittedAt` is inside exact
+`since`/`until`. Remove PRs authored by the account before rendering
+`prs_reviewed`. If `totalCount > 100`, fall back to paginated
+`repos/${REPOSITORY}/pulls/${NUMBER}/reviews` while selecting only `user.login` and
+`submitted_at`. Never fetch or render review bodies.
+
+Render reviewed PRs only as:
+
+```text
+* <title> [<REPO>#<number>](<url>)
+```
+
+#### Residual activity validation
+
+Start active set from exact creation, review, and merge events. Inspect only `open-involved`
+candidates not already active. Closed, unmerged PRs cannot qualify and need no residual inspection.
+
+For each residual PR, inspect commits through the PR endpoint. This replaces global commit search
+and commit-to-PR lookups:
+
+```sh
+gh api --method GET --paginate "repos/${REPOSITORY}/pulls/${NUMBER}/commits" "${GH_API_HEADERS[@]}" \
+  -F per_page=100 \
+  --jq '.[] | {author: .author.login, committer: .committer.login, author_date: .commit.author.date, committer_date: .commit.committer.date}'
+```
+
+Keep PR when GitHub-linked `.author.login` or `.committer.login` equals `GITHUB_USER` and
+the matching timestamp is inside exact UTC `since`/`until`. Use commits only as activity evidence;
+do not retain messages, SHAs, commit URLs, or standalone commits in the report.
+
+To preserve comment activity without collecting details, inspect only metadata on residual open
+candidates and discard it after filtering account and timestamp:
+
+```sh
+gh api --method GET --paginate "repos/${REPOSITORY}/issues/${NUMBER}/comments" "${GH_API_HEADERS[@]}" \
+  -F per_page=100 --jq '.[] | {author: .user.login, timestamp: .created_at}'
+
+gh api --method GET --paginate "repos/${REPOSITORY}/pulls/${NUMBER}/comments" "${GH_API_HEADERS[@]}" \
+  -F per_page=100 --jq '.[] | {author: .user.login, timestamp: .created_at}'
+```
+
+An account-authored conversation or inline review comment inside the exact window qualifies the
+PR. Do not store comment/review bodies, excerpts, IDs, or comment/review links. Store only an
+internal evidence flag and PR identity. If monitoring is needed, render only
+`**PR Monitoring:** Review/comment activity detected; inspect [<REPO>#<number>](<url>)`.
+
+Deployments are authored PRs whose hydrated `merged_at` is inside the exact UTC window. Summarize selected
+authored PRs into `github_accomplishments`, the existing **Accomplishments** section:
 
 ```
 * <pr title> [<REPO>#<num>](<url>)
@@ -97,18 +230,17 @@ Then **summarize as Claude** into the report's house style — for each signific
     * **Status:** <Done | In Review | Merged | ...>
     * **Key Changes Implemented:**
         * <bullet>
+    * **PR Monitoring:** <Review/comment activity detected; inspect PR; or None>
 ```
 
-Group by repo if multiple. Build `deployments` and `prs_reviewed` as bullet lists of
-`<title> [<REPO>#<num>](<url>)` (indented two spaces). Use "* None" when a list is empty.
+Keep `deployments` and `prs_reviewed` as existing indented bullet-list subsections. Add
+qualifying commit/comment-only PRs as one-line title and PR-link items under existing
+Accomplishments section. Do not add report sections or template placeholders. Do not add review or
+comment details. Use `* None` when empty. Note search caps or API failures instead of treating them as
+no activity.
 
-Two traps:
-
-- `gh search prs --reviewed-by '@me'` also returns the author's **own** PRs. Request the
-  `author` field and drop any PR authored by `GITHUB_USER` before building `prs_reviewed`.
-- The shell is **zsh**, which does not word-split unquoted variables. `for R in $REPOS`
-  iterates once over the whole string. Write the repo list inline in the `for`, or use a
-  zsh array (`repos=(a b c); for R in $repos`).
+The shell is zsh. Quote query arguments and endpoint variables. Use a quoted read loop with an
+explicit delimiter or a zsh array for JSONL; never rely on word splitting of an unquoted variable.
 
 ### 3. Meetings — Google Calendar (OAuth)
 
@@ -153,7 +285,11 @@ fit in one question — Friday silently disappears. Split the days across two qu
       the weekdays (≤ 4 options per question) to pin down which.
     - Nothing selected = none.
 - **Issues** — ask for current issues/blockers (free text; "None" allowed).
-- **Next Actions** — ask for upcoming tasks (free text; "None" allowed).
+- **Next Actions** — ask for upcoming tasks (free text; "None" allowed). Always prepend the
+  mandatory action to close every currently open authored PR found in step 2:
+  `* Close the open PR: <title> [<REPO>#<num>](<url>)`. List each open authored PR when there are
+  multiple. If none is open, render `* None` for this mandatory item; do not ask the user to close
+  a PR owned by someone else.
 - **Key Metrics / OMTM** — ask for the OMTM line(s). Users often paste a long multi-line
   block here; the UI strips newlines, so reflow it into markdown bullets when rendering.
 - **Bug counts** — ask **in its own AskUserQuestion call, after OMTM is answered**: major &
@@ -167,6 +303,8 @@ Format multi-item answers as markdown bullet lists; render selected WFO/OOO days
 
 ### 6. Assemble and save
 
+- Fold internal `prs_involved` and `pr_comments` output into
+  `github_accomplishments`; do not add placeholders or sections to the template.
 - Read `TEMPLATE`, then substitute every placeholder:
   `{AUTHOR_NAME} {period} {issues} {github_accomplishments} {deployments} {prs_reviewed}`
   `{google_forms_filled} {meetings_and_activities} {wfo_days} {omtm}`
@@ -209,6 +347,7 @@ syncing. **Do not sync automatically.**
 - Auth: `gh` handles GitHub; `google_oauth.py` handles Google via a standard OAuth 2.0
   flow (no MCP). The OAuth client-secret file and cached token live outside this skill —
   no secrets are stored in the skill itself.
-- To retarget repos or change the author/timezone, edit the CONFIG block above. To point
-  at a different Google OAuth client or token, set `GOOGLE_CLIENT_SECRET_FILE` /
-  `WEEKLY_REPORT_TOKEN_FILE` before running, or edit the defaults in `google_oauth.py`.
+- GitHub scope follows the authenticated account; set `GITHUB_USER` only for a deliberate
+  override. Change the report author/timezone in CONFIG. To point at a different Google OAuth
+  client or token, set `GOOGLE_CLIENT_SECRET_FILE` / `WEEKLY_REPORT_TOKEN_FILE` before running,
+  or edit defaults in `google_oauth.py`.
