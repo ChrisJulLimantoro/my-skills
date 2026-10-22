@@ -132,6 +132,10 @@ Model per aspect:
 - `model: "haiku"` → **hygiene** (treat its severities as suggestions only; in practice it
   over-rates, e.g. calling an unused return value "Major")
 
+Portability: `subagent_type` and `model` are Claude Code Agent options. In tools without them
+(e.g. Codex, OpenCode), dispatch the six aspects through that tool's own sub-agent mechanism with
+its default model, or, if it has none, review every aspect inline as in the small path.
+
 If Step 1 found prior reviews, first write `<SCRATCH>/prior.md`: one line per prior finding
 (reviewer, file:line, concern, and the author's claimed fix if they replied). Every sub-agent
 gets it, so they verify fixes instead of rediscovering the same issues.
