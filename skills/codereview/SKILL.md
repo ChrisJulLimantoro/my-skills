@@ -56,21 +56,30 @@ aspect-specific rubric:
 >    you may open it to get surrounding context beyond the diff hunks (improves accuracy). Do
 >    not review files outside the diff.
 > 2. Find issues that fall under **<ASPECT>** using this rubric: **<RUBRIC>**.
-> 3. Assign each finding a severity using these definitions:
->    - **Critical** — must fix before merge: data loss, security hole, crash, incorrect core behavior.
->    - **Major** — should fix: real bug in an edge case, significant maintainability/perf problem.
->    - **Minor** — worth fixing: localized issue, smaller correctness/clarity concern.
->    - **Nit** — optional polish: style, naming, micro-optimization.
-> 4. Be precise and specific — cite `file:line`, explain *why* it's a problem, and give a
->    concrete suggestion or code snippet. Do not invent issues; if you find nothing, return an
->    empty findings list. Stay strictly within your aspect.
-> 5. **Write** your result to `codereview-out/<ASPECT>.json` with exactly this shape:
+> 3. **Evidence bar — drop any finding that fails one of these:**
+>    - *Real?* Trace the actual call path and don't infer from names. Run a cheap check (a focused
+>      test, a one-line call, a CLI's `--help`) when it settles the question. If you can't
+>      confirm, say so and cap severity at Minor.
+>    - *Introduced by this change?* A pattern that already exists unchanged elsewhere is not a
+>      finding of this change.
+>    - *What concretely breaks?* Fill `failure_scenario` (input/state → wrong result).
+>      Theoretical attackers who only harm themselves, millisecond race windows, or exotic
+>      environments are at most a Nit.
+> 4. Severity by **realistic impact**:
+>    - **Critical** — main path broken for normal use, data loss, or a realistically exploitable hole.
+>    - **Major** — a real bug users will plausibly hit, a documented option that doesn't work, or a hot-path perf problem.
+>    - **Minor** — real but low impact/likelihood, or a clearly worthwhile simplification.
+>    - **Nit** — optional polish. Style/naming/length findings are never above Minor.
+>    Report at most **5** findings (more only for verified Major+). Empty is a fine answer.
+> 5. Be precise: cite `file:line`, explain *why*, give a concrete suggestion. Stay within your aspect.
+> 6. **Write** your result to `codereview-out/<ASPECT>.json` with exactly this shape:
 >    ```json
 >    {"aspect":"<ASPECT>","findings":[
 >      {"severity":"Critical|Major|Minor|Nit","file":"path","line":"123 or 120-135",
->       "title":"short title","detail":"why it's a problem","suggestion":"concrete fix / snippet"}]}
+>       "title":"short title","detail":"why it's a problem","failure_scenario":"input/state → wrong result",
+>       "verified":"how confirmed, or 'unconfirmed'","suggestion":"concrete fix / snippet"}]}
 >    ```
-> 6. Return a one-line summary (count by severity) as your final message.
+> 7. Return a one-line summary (count by severity) as your final message.
 
 Aspect rubrics:
 - **correctness** — logic errors, edge cases, null/undefined, off-by-one, race conditions, broken control flow, incorrect error handling, regressions vs. apparent intent.
@@ -90,13 +99,20 @@ Aspect rubrics:
 1. Combine all findings.
 2. **De-duplicate**: when multiple aspects flag the same line/issue, keep the single clearest
    write-up and tag it with every relevant aspect (e.g. `[correctness, performance]`).
-3. **Re-rank holistically**: a sub-agent's severity is a suggestion — adjust up or down given
-   the full picture and the severity definitions above.
+3. **Skeptic pass (mandatory):** sub-agents over-report and over-rate. For every Critical/Major,
+   read the code path yourself and, where cheap, reproduce it; `"verified":"unconfirmed"`
+   findings may not stay above Minor. Drop findings not introduced by this change, theoretical
+   ones, and self-harm-only ones. Where agents contradict each other, read the code and keep
+   only the correct claim. Then **re-rank holistically** against the severity definitions.
+   Treat haiku (hygiene) severities as suggestions only.
+4. **Noise budget:** aim for ≤ ~8 findings total. Keep every verified Critical/Major and cut the
+   weakest Minor/Nit (style first). Below the table, list what was dropped or downgraded with a
+   one-line reason each.
 
-4. **Compute the verdict** from the final severity counts (this drives the GitHub review event
+5. **Compute the verdict** from the final severity counts (this drives the GitHub review event
    that `/pr-review` consumes):
    - `Critical > 0 || Major > 0` → **Rejected with changes** (event `REQUEST_CHANGES`)
-   - else if `Minor > 0 || Nit > 0` → **Approve with changes** (event `COMMENT`)
+   - else if `Minor > 0 || Nit > 0` → **Approve with changes** (event `APPROVE`)
    - else (no findings) → **Approved** (event `APPROVE`)
 
 ## Step 5 — Write `review-report.md` and report back
@@ -106,7 +122,7 @@ Write the merged report to `./review-report.md` as a **table** with a leading ve
 ```
 # Code Review — <YYYY-MM-DD>
 
-**Verdict:** <Approved | Approve with changes | Rejected with changes>  (event: <APPROVE | COMMENT | REQUEST_CHANGES>)
+**Verdict:** <Approved | Approve with changes | Rejected with changes>  (event: <APPROVE | REQUEST_CHANGES>)
 
 ## Summary
 Files reviewed: <N> · Critical <C> / Major <M> / Minor <m> / Nits <n>
